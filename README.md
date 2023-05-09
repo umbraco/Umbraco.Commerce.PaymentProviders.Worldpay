@@ -1,3 +1,3 @@
-# Umbraco Commerce WorldPay Payment Provider
+# Umbraco Commerce Worldpay Payment Provider
 
-WorldPay Payment Provider for Umbraco Commerce
+Worldpay Payment Provider for Umbraco Commerce
