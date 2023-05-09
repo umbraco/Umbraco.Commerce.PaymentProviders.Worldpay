@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <Title>Umbraco Commerce WorldPay Payment Provider</Title>
-    <Description>WorldPay payment provider for Umbraco Commerce</Description>
+    <Title>Umbraco Commerce Worldpay Payment Provider</Title>
+    <Description>Worldpay payment provider for Umbraco Commerce</Description>
   </PropertyGroup>
 
   <ItemGroup>
