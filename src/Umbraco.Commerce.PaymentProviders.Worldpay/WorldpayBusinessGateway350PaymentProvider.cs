@@ -195,15 +195,32 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
             return await base.GetOrderReferenceAsync(ctx, cancellationToken).ConfigureAwait(false);
         }
 
-        public override Task<CallbackResult> ProcessCallbackAsync(PaymentProviderContext<WorldpayBusinessGateway350Settings> ctx, CancellationToken cancellationToken = default)
+        public override async Task<CallbackResult> ProcessCallbackAsync(PaymentProviderContext<WorldpayBusinessGateway350Settings> ctx, CancellationToken cancellationToken = default)
         {
-            // The request stream is processed inside GetOrderReferenceAsync and the relevant data
-            // is stored in the payment provider context to prevent needing to re-process it
-            // so we just access it directly from the context assuming it exists.
-            var queryData = ctx.AdditionalData["queryData"] as NameValueCollection;
-            var formData = ctx.AdditionalData["formData"] as NameValueCollection;
+            // We can't rely on the request stream processing logic inside GetOrderReferenceAsync
 
-            if (queryData["msgType"] == "authResult")
+            // GetOrderReferenceAsync called only when inbound request has following pattern: {domain name}/umbraco/commerce/payment/callback/worldpay-bs350/{payment method id}
+
+            // In case when inbound request has following pattern: {domain name}/umbraco/commerce/payment/callback/worldpay-bs350/{payment method id}/{order number]/{hash}
+            // GetOrderReferenceAsync won't be triggered.
+
+            // So we have to check was the request stream processed.
+
+            if (!ctx.AdditionalData.TryGetValue("queryData", out var rawQueryData))
+            {
+                rawQueryData = HttpUtility.ParseQueryString(ctx.Request.RequestUri.Query);
+            }
+
+            var queryData = rawQueryData as NameValueCollection;
+
+            if (!ctx.AdditionalData.TryGetValue("formData", out var rawFormData))
+            {
+                rawFormData = await ctx.Request.Content.ReadAsFormDataAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            var formData = rawFormData as NameValueCollection;
+
+            if (formData["msgType"] == "authResult")
             {
                 _logger.Info($"Payment call back for cart {ctx.Order.OrderNumber}");
 
@@ -219,7 +236,7 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
                     {
                         _logger.Info($"Payment call back for cart {ctx.Order.OrderNumber} response password incorrect");
 
-                        return Task.FromResult(CallbackResult.Ok());
+                        return CallbackResult.Ok();
                     }
                 }
 
@@ -232,13 +249,15 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
 
                     _logger.Info($"Payment call back for cart {ctx.Order.OrderNumber} payment authorised");
 
-                    return Task.FromResult(CallbackResult.Ok(new TransactionInfo
+                    var transactionInfo = new TransactionInfo
                     {
                         AmountAuthorized = totalAmount,
                         TransactionFee = 0m,
                         TransactionId = transactionId,
                         PaymentStatus = paymentStatus
-                    }));
+                    };
+
+                    return CallbackResult.Ok(transactionInfo);
                 }
                 else
                 {
@@ -246,7 +265,7 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
                 }
             }
 
-            return Task.FromResult(CallbackResult.Ok());
+            return CallbackResult.Ok();
         }
     }
 }
