@@ -18,9 +18,6 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
     [PaymentProvider("worldpay-bs350", "Worldpay Business Gateway 350", "Worldpay Business Gateway 350 payment provider", Icon = "icon-credit-card")]
     public class WorldpayBusinessGateway350PaymentProvider : PaymentProviderBase<WorldpayBusinessGateway350Settings>
     {
-        private const string LiveBaseUrl = "https://secure.worldpay.com/wcc/purchase";
-        private const string TestBaseUrl = "https://secure-test.worldpay.com/wcc/purchase";
-
         private readonly ILogger<WorldpayBusinessGateway350PaymentProvider> _logger;
 
         public override bool FinalizeAtContinueUrl { get; } = false;
@@ -66,67 +63,56 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
 
             try
             {
-                if (context.Settings.VerboseLogging)
+                if (context.Settings.IsVerboseLoggingEnabled)
                 {
                     _logger.Info("{MethodName} method called for cart {OrderNumber}", nameof(GenerateFormAsync), context.Order.OrderNumber);
                 }
 
-                ArgumentNullException.ThrowIfNull(context.Settings.InstallId);
+                ArgumentNullException.ThrowIfNull(context.Settings.InstallationReference);
 
                 if (!context.Order.PaymentInfo.CountryId.HasValue)
                 {
                     throw new InvalidOperationException($"{nameof(context.Order.PaymentInfo.CountryId)} was null");
                 }
 
-                var billingCountry = Context.Services.CountryService.GetCountry(context.Order.PaymentInfo.CountryId.Value);
-                var billingCountryCode = billingCountry.Code.ToUpperInvariant();
-
-                // Ensure billing country has valid ISO 3166 code
-                var iso3166Countries = Context.Services.CountryService.GetIso3166CountryRegions();
-                if (iso3166Countries.All(x => x.Code != billingCountryCode))
-                {
-                    throw new InvalidOperationException($"Country must be a valid ISO 3166 billing country code: {billingCountry.Name}");
-                }
-
-                var currency = Context.Services.CurrencyService.GetCurrency(context.Order.CurrencyId);
-                var currencyCode = currency.Code.ToUpperInvariant();
-
-                // Ensure currency has valid ISO 4217 code
-                if (!Iso4217.CurrencyCodes.ContainsKey(currencyCode))
-                {
-                    throw new InvalidOperationException($"Currency must be a valid ISO 4217 currency code: {currency.Name}");
-                }
-
+                var billingCountryCode = GetBillingCountryCode(context);
+                var currencyCode = GetCurrencyCode(context);
+                var address1 = context.Order.Properties[context.Settings.BillingAddressLine1PropertyAlias] ?? string.Empty;
+                var city = context.Order.Properties[context.Settings.BillingAddressCityPropertyAlias] ?? string.Empty;
+                var postcode = context.Order.Properties[context.Settings.BillingAddressZipCodePropertyAlias] ?? string.Empty;
+                var amount = context.Order.TransactionAmount.Value.Value.ToString("0.00", CultureInfo.InvariantCulture);
+                var orderReference = context.Order.GenerateOrderReference();
                 var firstName = string.IsNullOrEmpty(context.Settings.BillingFirstNamePropertyAlias)
                     ? context.Order.CustomerInfo.FirstName
                     : context.Order.Properties[context.Settings.BillingFirstNamePropertyAlias];
                 var lastName = string.IsNullOrEmpty(context.Settings.BillingLastNamePropertyAlias)
                     ? context.Order.CustomerInfo.LastName
                     : context.Order.Properties[context.Settings.BillingLastNamePropertyAlias];
-                var address1 = context.Order.Properties[context.Settings.BillingAddressLine1PropertyAlias] ?? string.Empty;
-                var city = context.Order.Properties[context.Settings.BillingAddressCityPropertyAlias] ?? string.Empty;
-                var postcode = context.Order.Properties[context.Settings.BillingAddressZipCodePropertyAlias] ?? string.Empty;
-                var amount = context.Order.TransactionAmount.Value.Value.ToString("0.00", CultureInfo.InvariantCulture);
-                var orderReference = context.Order.GenerateOrderReference();
+                var authMode = context.Settings.IsCaptureEnabled
+                    ? PaymentStatus.Captured.ToAuthMode()
+                    : PaymentStatus.Authorized.ToAuthMode();
+                var testMode = context.Settings.IsTestModeEnabled
+                    ? WorldpayValues.TestMode.Enabled
+                    : WorldpayValues.TestMode.Disabled;
 
                 var orderDetails = new Dictionary<string, string>
                 {
-                    { WorldPayField.INSTALLATION_ID, context.Settings.InstallId },
-                    { WorldPayField.TEST_MODE, context.Settings.TestMode ? "100" : "0" },
-                    { WorldPayField.AUTH_MODE, context.Settings.IsFullAuthorisationEnabled ? "A" : "E" },
-                    { WorldPayField.CART_ID, context.Order.OrderNumber },
-                    { WorldPayField.AMOUNT, amount },
-                    { WorldPayField.CURRENCY, currencyCode },
-                    { WorldPayField.NAME, $"{firstName} {lastName}" },
-                    { WorldPayField.EMAIL, context.Order.CustomerInfo.Email },
-                    { WorldPayField.ADDRESS_1, address1 },
-                    { WorldPayField.TOWN, city },
-                    { WorldPayField.POSTCODE, postcode },
-                    { WorldPayField.COUNTRY, billingCountryCode },
-                    { WorldPayField.Custom.ORDER_REFERENCE, orderReference },
-                    { WorldPayField.Custom.CANCEL_URL, context.Urls.CancelUrl },
-                    { WorldPayField.Custom.RETURN_URL, context.Urls.ContinueUrl },
-                    { WorldPayField.Custom.CALLBACK_URL, context.Urls.CallbackUrl }
+                    { WorldpayParameters.Request.InstId, context.Settings.InstallationReference },
+                    { WorldpayParameters.Request.TestMode, testMode },
+                    { WorldpayParameters.Request.AuthMode, authMode },
+                    { WorldpayParameters.Request.CartId, context.Order.OrderNumber },
+                    { WorldpayParameters.Request.Amount, amount },
+                    { WorldpayParameters.Request.Currency, currencyCode },
+                    { WorldpayParameters.Request.Name, $"{firstName} {lastName}" },
+                    { WorldpayParameters.Request.Email, context.Order.CustomerInfo.Email },
+                    { WorldpayParameters.Request.Address1, address1 },
+                    { WorldpayParameters.Request.Town, city },
+                    { WorldpayParameters.Request.Postcode, postcode },
+                    { WorldpayParameters.Request.Country, billingCountryCode },
+                    { WorldpayParameters.Request.Custom.OrderReference, orderReference },
+                    { WorldpayParameters.Request.Custom.CancellUrl, context.Urls.CancelUrl },
+                    { WorldpayParameters.Request.Custom.ReturnUrl, context.Urls.ContinueUrl },
+                    { WorldpayParameters.Request.Custom.CallbackUrl, context.Urls.CallbackUrl }
                 };
 
                 if (!string.IsNullOrEmpty(context.Settings.Md5Secret))
@@ -134,27 +120,27 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
                     var signatureBody = SignatureHelper.EnrichPatternWithValues(context.Settings, orderDetails);
                     var signature = SignatureHelper.CreateSignature(signatureBody);
 
-                    orderDetails.Add(WorldPayField.SIGNATURE, signature);
+                    orderDetails.Add(WorldpayParameters.Request.Signature, signature);
 
-                    if (context.Settings.VerboseLogging)
+                    if (context.Settings.IsVerboseLoggingEnabled)
                     {
                         _logger.Info("Before Md5: {SignatureBody}", signatureBody);
                         _logger.Info("Signature: {Signature}", signature);
                     }
                 }
 
-                var url = context.Settings.TestMode ? TestBaseUrl : LiveBaseUrl;
+                var action = GetFormAction(context);
 
-                var form = new PaymentForm(url, PaymentFormMethod.Post)
+                if (context.Settings.IsVerboseLoggingEnabled)
+                {
+                    _logger.Info("Payment url {Url}", action);
+                    _logger.Info("Form data {Values}", orderDetails.ToFriendlyString());
+                }
+
+                var form = new PaymentForm(action, PaymentFormMethod.Post)
                 {
                     Inputs = orderDetails
                 };
-
-                if (context.Settings.VerboseLogging)
-                {
-                    _logger.Info("Payment url {Url}", url);
-                    _logger.Info("Form data {Values}", orderDetails.ToFriendlyString());
-                }
 
                 var paymentFormresult = new PaymentFormResult()
                 {
@@ -177,10 +163,9 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
             ArgumentNullException.ThrowIfNull(context.Request);
             ArgumentNullException.ThrowIfNull(context.Settings);
 
-            var queryData = GetQueryData(context);
             var formData = await GetFormDataAsync(context, cancellationToken).ConfigureAwait(false);
 
-            if (context.Settings.VerboseLogging)
+            if (context.Settings.IsVerboseLoggingEnabled)
             {
                 _logger.Info("Worldpay data {FormData}", formData.ToFriendlyString());
             }
@@ -189,16 +174,16 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
             {
                 if (!IsResponsePasswordValid(context, formData))
                 {
-                    if (context.Settings.VerboseLogging)
+                    if (context.Settings.IsVerboseLoggingEnabled)
                     {
-                        _logger.Info($"{nameof(context.Settings.ResponsePassword)} was incorrect");
+                        _logger.Warn($"{nameof(context.Settings.ResponsePassword)} was incorrect");
                     }
 
                     return null;
                 }
             }
 
-            if (OrderReference.TryParse(formData[WorldPayField.Custom.ORDER_REFERENCE], out var orderReference))
+            if (OrderReference.TryParse(formData[WorldpayParameters.Request.Custom.OrderReference], out var orderReference))
             {
                 return orderReference;
             }
@@ -214,16 +199,23 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
             // GetOrderReferenceAsync won't be triggered.
 
             var queryData = GetQueryData(context);
-            var formData = await GetFormDataAsync(context, cancellationToken).ConfigureAwait(false);
 
-            if (formData[WorldPayField.MESSAGE_TYPE] != "authResult")
+            const string MessageTypeValue = "authResult";
+            if (queryData[WorldpayParameters.Query.MsgType] != MessageTypeValue)
             {
+                if (context.Settings.IsVerboseLoggingEnabled)
+                {
+                    _logger.Warn("Worldpay callback doesn't have {Value} in query: {Query}", MessageTypeValue, queryData.ToFriendlyString());
+                }
+
                 return CallbackResult.Ok();
             }
 
+            var formData = await GetFormDataAsync(context, cancellationToken).ConfigureAwait(false);
+
             _logger.Info("Payment call back for cart {OrderNumber}", context.Order.OrderNumber);
 
-            if (context.Settings.VerboseLogging)
+            if (context.Settings.IsVerboseLoggingEnabled)
             {
                 _logger.Info("Worldpay data {Data}", formData.ToFriendlyString());
             }
@@ -232,43 +224,86 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
             {
                 if (!IsResponsePasswordValid(context, formData))
                 {
-                    _logger.Info("Payment call back for cart {OrderNumber} response password incorrect", context.Order.OrderNumber);
+                    _logger.Warn("Payment call back for cart {OrderNumber} response password incorrect", context.Order.OrderNumber);
 
                     return CallbackResult.Ok();
                 }
             }
 
             // if still here, password was not required or matched
-            if (formData[WorldPayField.TRANSACTION_STATUS] == "Y")
+
+            var transactionStatus = formData[WorldpayParameters.Response.TransStatus];
+            if (transactionStatus != WorldpayValues.TransStatus.Succeed)
             {
-                var rawTotalAmount = formData[WorldPayField.AUTHORIZED_AMOUNT]
-                    ?? throw new InvalidOperationException($"Value of {nameof(formData)}[{WorldPayField.AUTHORIZED_AMOUNT}] was null");
-                var totalAmount = decimal.Parse(rawTotalAmount, CultureInfo.InvariantCulture);
-                var transactionId = formData[WorldPayField.TRANSACTION_ID];
+                _logger.Error($"Payment call back for cart {context.Order.OrderNumber} payment not authorised or error: transaction status = {transactionStatus}");
 
-                // TODO: does this condition right?
-                // Read more: https://github.com/umbraco/Umbraco.Commerce.PaymentProviders.Worldpay/issues/5
-                var paymentStatus = formData[WorldPayField.AUTH_MODE] == "A" ? PaymentStatus.Captured : PaymentStatus.Authorized;
-
-                _logger.Info("Payment call back for cart {OrderNumber} payment authorised", context.Order.OrderNumber);
-
-                var transactionInfo = new TransactionInfo
-                {
-                    AmountAuthorized = totalAmount,
-                    TransactionFee = 0m,
-                    TransactionId = transactionId,
-                    PaymentStatus = paymentStatus
-                };
-
-                return CallbackResult.Ok(transactionInfo);
+                return CallbackResult.Ok();
             }
 
-            _logger.Info($"Payment call back for cart {context.Order.OrderNumber} payment not authorised or error");
+            var rawTotalAmount = formData[WorldpayParameters.Response.AuthAmount] ?? throw new InvalidOperationException($"Value of {nameof(formData)}[{WorldpayParameters.Response.AuthAmount}] was null");
+            var totalAmount = decimal.Parse(rawTotalAmount, CultureInfo.InvariantCulture);
+            var transactionId = formData[WorldpayParameters.Response.TransId];
+            var paymentStatus = formData[WorldpayParameters.Request.AuthMode] == WorldpayValues.AuthMode.FullAuthorisation
+                ? PaymentStatus.Captured
+                : PaymentStatus.Authorized;
 
-            return CallbackResult.Ok();
+            _logger.Info("Payment call back for cart {OrderNumber} payment {Action}",
+                context.Order.OrderNumber,
+                paymentStatus.ToString().ToLowerInvariant()
+            );
+
+            var transactionInfo = new TransactionInfo
+            {
+                AmountAuthorized = totalAmount,
+                TransactionFee = 0m,
+                TransactionId = transactionId,
+                PaymentStatus = paymentStatus,
+            };
+
+            return CallbackResult.Ok(transactionInfo);
         }
 
-        private static bool IsResponsePasswordValid(PaymentProviderContext<WorldpayBusinessGateway350Settings> context, NameValueCollection formData) => context.Settings.ResponsePassword == formData[WorldPayField.CALLBACK_PASSWORD];
+        private static string GetFormAction(PaymentProviderContext<WorldpayBusinessGateway350Settings> context)
+        {
+            const string LIVE_BASE_URL = "https://secure.worldpay.com/wcc/purchase";
+            const string TEST_BASE_URL = "https://secure-test.worldpay.com/wcc/purchase";
+
+            var url = context.Settings.IsTestModeEnabled ? TEST_BASE_URL : LIVE_BASE_URL;
+
+            return url;
+        }
+
+        private string GetCurrencyCode(PaymentProviderContext<WorldpayBusinessGateway350Settings> context)
+        {
+            var currency = Context.Services.CurrencyService.GetCurrency(context.Order.CurrencyId);
+            var currencyCode = currency.Code.ToUpperInvariant();
+
+            if (!Iso4217.CurrencyCodes.ContainsKey(currencyCode)) // Ensure currency has valid ISO 4217 code
+            {
+                throw new InvalidOperationException($"Currency must be a valid ISO 4217 currency code: {currency.Name}");
+            }
+
+            return currencyCode;
+        }
+
+        private string GetBillingCountryCode(PaymentProviderContext<WorldpayBusinessGateway350Settings> context)
+        {
+            ArgumentNullException.ThrowIfNull(context.Order.PaymentInfo.CountryId);
+
+            var billingCountry = Context.Services.CountryService.GetCountry(context.Order.PaymentInfo.CountryId.Value);
+
+            var billingCountryCode = billingCountry.Code.ToUpperInvariant();
+
+            var iso3166Countries = Context.Services.CountryService.GetIso3166CountryRegions();
+            if (iso3166Countries.All(x => x.Code != billingCountryCode)) // Ensure billing country has valid ISO 3166 code
+            {
+                throw new InvalidOperationException($"Country must be a valid ISO 3166 billing country code: {billingCountry.Name}");
+            }
+
+            return billingCountryCode;
+        }
+
+        private static bool IsResponsePasswordValid(PaymentProviderContext<WorldpayBusinessGateway350Settings> context, NameValueCollection formData) => context.Settings.ResponsePassword == formData[WorldpayParameters.Response.CallbackPW];
 
         private static NameValueCollection GetQueryData(PaymentProviderContext<WorldpayBusinessGateway350Settings> context)
         {

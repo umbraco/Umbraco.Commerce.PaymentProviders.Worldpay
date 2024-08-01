@@ -1,10 +1,12 @@
-using System.Diagnostics.CodeAnalysis;
 using Umbraco.Commerce.Core.PaymentProviders;
 
 namespace Umbraco.Commerce.PaymentProviders.Worldpay
 {
     public class WorldpayBusinessGateway350Settings
     {
+        // TODO: add support for validation settings
+        // PaymentProviderSetting doesn't have validation property to set mandatory option.
+
         [PaymentProviderSetting(
             Name = "Continue Url",
             Description = "The Continue URL",
@@ -57,10 +59,10 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
         /// Read more: <see href="https://developerengine.fisglobal.com/apis/bg350/send-order-details#parameters-explained"/>
         /// </summary>
         [PaymentProviderSetting(
-            Name = "Install ID",
-            Description = "The installation ID. Please use the 27-character Installation Reference as your installation ID",
+            Name = "Installation Reference",
+            Description = "A unique 27-character reference assigned for the website",
             SortOrder = 9000)]
-        public string InstallId { get; set; } = default!;
+        public string InstallationReference { get; set; } = default!;
 
         /// <summary>
         /// Read more: <see href="https://developerengine.fisglobal.com/apis/bg350/enhancing-security-with-md5#if-you-use-a-bespoke-setup"/>
@@ -75,8 +77,8 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
         /// Read more: <see href="https://developerengine.fisglobal.com/apis/bg350/enhancing-security-with-md5#if-you-use-a-bespoke-setup"/>
         /// </summary>
         [PaymentProviderSetting(
-            Name = "Signature Fields",
-            Description = "The Worldpay Signature fields. Example value: instId:amount:currency:cartId:MC_userId",
+            Name = "Signature Pattern",
+            Description = "The Worldpay's \"SignatureFields\" property. Required if MD5 Secret is not empty. Example value: instId:amount:currency:cartId:MC_userId",
             SortOrder = 14000)]
         public string? SignaturePattern { get; set; }
 
@@ -90,16 +92,16 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
         /// Read more: <see href="https://developerengine.fisglobal.com/apis/bg350/send-order-details#optional-parameters"/>
         /// </summary>
         [PaymentProviderSetting(
-            Name = "Full Authorisation",
-            Description = "Flag indicating whether to enable Full Authorisation or not. If disabled, pre-authorisation will be used",
+            Name = "Capture",
+            Description = "Flag indicating whether to immediately capture the payment, or whether to just authorize the payment for later (manual) capture",
             SortOrder = 16000)]
-        public bool IsFullAuthorisationEnabled { get; set; }
+        public bool IsCaptureEnabled { get; set; }
 
         [PaymentProviderSetting(
             Name = "Test Mode",
             Description = "Set whether to process payments in test mode",
             SortOrder = 17000)]
-        public bool TestMode { get; set; }
+        public bool IsTestModeEnabled { get; set; }
 
         #region Advanced
 
@@ -108,7 +110,7 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
             Description = "Enable verbose logging",
             IsAdvanced = true,
             SortOrder = 18000)]
-        public bool VerboseLogging { get; set; }
+        public bool IsVerboseLoggingEnabled { get; set; }
 
         #endregion
     }
