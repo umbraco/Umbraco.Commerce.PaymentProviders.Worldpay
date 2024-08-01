@@ -250,7 +250,7 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
 
                 // TODO: does this condition right?
                 // Read more: https://github.com/umbraco/Umbraco.Commerce.PaymentProviders.Worldpay/issues/5
-                var paymentStatus = formData[WorldPayField.AUTH_MODE] == "A" ? PaymentStatus.Authorized : PaymentStatus.Captured;
+                var paymentStatus = formData[WorldPayField.AUTH_MODE] == "A" ? PaymentStatus.Captured : PaymentStatus.Authorized;
 
                 _logger.Info("Payment call back for cart {OrderNumber} payment authorised", context.Order.OrderNumber);
 
