@@ -218,7 +218,6 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
 
             if (formData[WorldPayField.MESSAGE_TYPE] != "authResult")
             {
-                // TODO: should we return here CallbackResult.BadRequest()?
                 return CallbackResult.Ok();
             }
 
@@ -235,7 +234,6 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
                 {
                     _logger.Info("Payment call back for cart {OrderNumber} response password incorrect", context.Order.OrderNumber);
 
-                    // TODO: should we return here CallbackResult.BadRequest()?
                     return CallbackResult.Ok();
                 }
             }
@@ -267,7 +265,6 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
 
             _logger.Info($"Payment call back for cart {context.Order.OrderNumber} payment not authorised or error");
 
-            // TODO: should we return here CallbackResult.BadRequest()?
             return CallbackResult.Ok();
         }
 
