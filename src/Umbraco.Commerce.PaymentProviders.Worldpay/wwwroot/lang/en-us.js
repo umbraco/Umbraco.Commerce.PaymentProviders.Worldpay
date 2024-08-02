@@ -1,5 +1,5 @@
 export default {
-    paymentProviders: {
+    ucPaymentProviders: {
         'worldpayBs350Label': 'Worldpay Business Gateway 350',
         'worldpayBs350Description': 'Worldpay Business Gateway 350 payment provider',
         'worldpayBs350SettingsContinueUrlLabel': 'Continue URL',
