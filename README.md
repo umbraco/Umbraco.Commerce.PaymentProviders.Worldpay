@@ -2,4 +2,5 @@
 
 Worldpay Payment Provider for Umbraco Commerce
 
-Documentation: https://docs.umbraco.com/umbraco-commerce-payment-providers/worldpay/worldpay
+- Documentation: https://docs.umbraco.com/umbraco-commerce-payment-providers/worldpay/worldpay
+- Release notes: https://github.com/umbraco/Umbraco.Commerce.PaymentProviders.Worldpay/releases

@@ -1,8 +1,9 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.Razor">
 
   <PropertyGroup>
     <Title>Umbraco Commerce Worldpay Payment Provider</Title>
     <Description>Worldpay payment provider for Umbraco Commerce</Description>
+    <StaticWebAssetBasePath>App_Plugins/UmbracoCommerceWorldpayPaymentProvider</StaticWebAssetBasePath>
   </PropertyGroup>
 
   <ItemGroup>

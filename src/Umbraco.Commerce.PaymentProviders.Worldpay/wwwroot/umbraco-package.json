@@ -1,0 +1,17 @@
+{
+    "name": "Umbraco Commerce Worldpay Payment Provider",
+    "$schema": "../umbraco-package-schema.json",
+    "extensions": [
+        {
+            "type": "localization",
+            "alias": "UmbracoCommerce.PaymentProviders.Worldpay.Localization.En_US",
+            "weight": -100,
+            "name": "English (US)",
+            "meta": {
+                "culture": "en-us"
+            },
+            "js": "/App_Plugins/UmbracoCommerceWorldpayPaymentProvider/lang/en-us.js"
+        }
+    ],
+    "version": ""
+}
