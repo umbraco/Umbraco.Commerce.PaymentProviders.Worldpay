@@ -42,14 +42,15 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay.Helpers
 
             var cryptoServiceProvider = new MD5CryptoServiceProvider();
 
-            var signature = cryptoServiceProvider.ComputeHash(inputBytes).ToHex(true);
+            var signature = cryptoServiceProvider.ComputeHash(inputBytes).ToHex();
 
             return signature;
         }
 
-        private static string ToHex(this byte[] bytes, bool toLower)
+        private static string ToHex(this byte[] bytes)
         {
             var c = new char[bytes.Length * 2];
+
             for (int bx = 0, cx = 0; bx < bytes.Length; ++bx, ++cx)
             {
                 var b = ((byte)(bytes[bx] >> 4));
@@ -59,7 +60,9 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay.Helpers
                 c[++cx] = (char)(b > 9 ? b + 0x37 + 0x20 : b + 0x30);
             }
 
-            return toLower ? new string(c).ToLower(null) : new string(c);
+            var hex = new string(c).ToLower(null);
+
+            return hex;
         }
     }
 }

@@ -63,12 +63,12 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
 
             try
             {
-                if (context.Settings.IsVerboseLoggingEnabled)
+                if (context.Settings.VerboseLogging)
                 {
                     _logger.Info("{MethodName} method called for cart {OrderNumber}", nameof(GenerateFormAsync), context.Order.OrderNumber);
                 }
 
-                ArgumentNullException.ThrowIfNull(context.Settings.InstallationReference);
+                ArgumentNullException.ThrowIfNull(context.Settings.InstallId);
 
                 if (!context.Order.PaymentInfo.CountryId.HasValue)
                 {
@@ -88,16 +88,16 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
                 var lastName = string.IsNullOrEmpty(context.Settings.BillingLastNamePropertyAlias)
                     ? context.Order.CustomerInfo.LastName
                     : context.Order.Properties[context.Settings.BillingLastNamePropertyAlias];
-                var authMode = context.Settings.IsCaptureEnabled
+                var authMode = context.Settings.Capture
                     ? PaymentStatus.Captured.ToAuthMode()
                     : PaymentStatus.Authorized.ToAuthMode();
-                var testMode = context.Settings.IsTestModeEnabled
+                var testMode = context.Settings.TestMode
                     ? WorldpayValues.TestMode.Enabled
                     : WorldpayValues.TestMode.Disabled;
 
                 var orderDetails = new Dictionary<string, string>
                 {
-                    { WorldpayParameters.Request.InstId, context.Settings.InstallationReference },
+                    { WorldpayParameters.Request.InstId, context.Settings.InstallId },
                     { WorldpayParameters.Request.TestMode, testMode },
                     { WorldpayParameters.Request.AuthMode, authMode },
                     { WorldpayParameters.Request.CartId, context.Order.OrderNumber },
@@ -122,7 +122,7 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
 
                     orderDetails.Add(WorldpayParameters.Request.Signature, signature);
 
-                    if (context.Settings.IsVerboseLoggingEnabled)
+                    if (context.Settings.VerboseLogging)
                     {
                         _logger.Info("Before Md5: {SignatureBody}", signatureBody);
                         _logger.Info("Signature: {Signature}", signature);
@@ -131,10 +131,11 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
 
                 var action = GetFormAction(context);
 
-                if (context.Settings.IsVerboseLoggingEnabled)
+                if (context.Settings.VerboseLogging)
                 {
                     _logger.Info("Payment url {Url}", action);
-                    _logger.Info("Form data {Values}", orderDetails.ToFriendlyString());
+                    // TODO: after removing obsolete VerboseLoggingHelper use it like extension
+                    _logger.Info("Form data {Values}", IDictionaryExtensions.ToFriendlyString(orderDetails));
                 }
 
                 var form = new PaymentForm(action, PaymentFormMethod.Post)
@@ -165,16 +166,17 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
 
             var formData = await GetFormDataAsync(context, cancellationToken).ConfigureAwait(false);
 
-            if (context.Settings.IsVerboseLoggingEnabled)
+            if (context.Settings.VerboseLogging)
             {
-                _logger.Info("Worldpay data {FormData}", formData.ToFriendlyString());
+                // TODO: after removing obsolete VerboseLoggingHelper use it like extension
+                _logger.Info("Worldpay data {FormData}", NameValueCollectionExtensions.ToFriendlyString(formData));
             }
 
             if (!string.IsNullOrEmpty(context.Settings.ResponsePassword))
             {
                 if (!IsResponsePasswordValid(context, formData))
                 {
-                    if (context.Settings.IsVerboseLoggingEnabled)
+                    if (context.Settings.VerboseLogging)
                     {
                         _logger.Warn($"{nameof(context.Settings.ResponsePassword)} was incorrect");
                     }
@@ -203,9 +205,10 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
             const string MessageTypeValue = "authResult";
             if (queryData[WorldpayParameters.Query.MsgType] != MessageTypeValue)
             {
-                if (context.Settings.IsVerboseLoggingEnabled)
+                if (context.Settings.VerboseLogging)
                 {
-                    _logger.Warn("Worldpay callback doesn't have {Value} in query: {Query}", MessageTypeValue, queryData.ToFriendlyString());
+                    // TODO: after removing obsolete VerboseLoggingHelper use it like extension
+                    _logger.Warn("Worldpay callback doesn't have {Value} in query: {Query}", MessageTypeValue, NameValueCollectionExtensions.ToFriendlyString(queryData));
                 }
 
                 return CallbackResult.Ok();
@@ -215,9 +218,10 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
 
             _logger.Info("Payment call back for cart {OrderNumber}", context.Order.OrderNumber);
 
-            if (context.Settings.IsVerboseLoggingEnabled)
+            if (context.Settings.VerboseLogging)
             {
-                _logger.Info("Worldpay data {Data}", formData.ToFriendlyString());
+                // TODO: after removing obsolete VerboseLoggingHelper use it like extension
+                _logger.Info("Worldpay data {Data}", NameValueCollectionExtensions.ToFriendlyString(formData));
             }
 
             if (!string.IsNullOrEmpty(context.Settings.ResponsePassword))
@@ -268,7 +272,7 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
             const string LIVE_BASE_URL = "https://secure.worldpay.com/wcc/purchase";
             const string TEST_BASE_URL = "https://secure-test.worldpay.com/wcc/purchase";
 
-            var url = context.Settings.IsTestModeEnabled ? TEST_BASE_URL : LIVE_BASE_URL;
+            var url = context.Settings.TestMode ? TEST_BASE_URL : LIVE_BASE_URL;
 
             return url;
         }

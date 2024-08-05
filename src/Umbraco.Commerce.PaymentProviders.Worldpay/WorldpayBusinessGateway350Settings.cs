@@ -4,7 +4,7 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
 {
     public class WorldpayBusinessGateway350Settings
     {
-        // TODO: add support for validation settings
+        // TODO: add support for validation settings: https://github.com/umbraco/Umbraco.Commerce.Issues/discussions/546
         // PaymentProviderSetting doesn't have validation property to set mandatory option.
 
         [PaymentProviderSetting(
@@ -62,7 +62,7 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
             Name = "Installation Reference",
             Description = "A unique 27-character reference assigned for the website",
             SortOrder = 9000)]
-        public string InstallationReference { get; set; } = default!;
+        public string InstallId { get; set; } = default!;
 
         /// <summary>
         /// Read more: <see href="https://developerengine.fisglobal.com/apis/bg350/enhancing-security-with-md5#if-you-use-a-bespoke-setup"/>
@@ -95,13 +95,13 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
             Name = "Capture",
             Description = "Flag indicating whether to immediately capture the payment, or whether to just authorize the payment for later (manual) capture",
             SortOrder = 16000)]
-        public bool IsCaptureEnabled { get; set; }
+        public bool Capture { get; set; }
 
         [PaymentProviderSetting(
             Name = "Test Mode",
             Description = "Set whether to process payments in test mode",
             SortOrder = 17000)]
-        public bool IsTestModeEnabled { get; set; }
+        public bool TestMode { get; set; }
 
         #region Advanced
 
@@ -110,7 +110,7 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
             Description = "Enable verbose logging",
             IsAdvanced = true,
             SortOrder = 18000)]
-        public bool IsVerboseLoggingEnabled { get; set; }
+        public bool VerboseLogging { get; set; }
 
         #endregion
     }
