@@ -3,6 +3,8 @@
   <PropertyGroup>
     <Title>Umbraco Commerce Worldpay Payment Provider</Title>
     <Description>Worldpay payment provider for Umbraco Commerce</Description>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>

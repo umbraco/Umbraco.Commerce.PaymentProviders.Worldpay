@@ -1,10 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
-using System.Linq;
 
 namespace Umbraco.Commerce.PaymentProviders.Worldpay.Helpers
 {
+    [Obsolete("This class not in use. Logic moved to extensions")]
     public static class VerboseLoggingHelper
     {
         public static string ToFriendlyString<TKey, TValue>(this IDictionary<TKey, TValue> dictionary)
@@ -13,7 +13,7 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay.Helpers
                 throw new ArgumentNullException("dictionary");
 
             var items = from kvp in dictionary
-                select kvp.Key + "=" + kvp.Value;
+                        select kvp.Key + "=" + kvp.Value;
 
             return "{" + string.Join(",", items) + "}";
         }
@@ -25,7 +25,7 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay.Helpers
 
             var nvc = nameValueCollection.AllKeys.SelectMany(nameValueCollection.GetValues, (k, v) => new { key = k, value = v });
             var items = from item in nvc
-                       select item.key + "=" + item.value;
+                        select item.key + "=" + item.value;
 
             return "{" + string.Join(",", items) + "}";
         }

@@ -1,8 +1,9 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace Umbraco.Commerce.PaymentProviders.Worldpay.Helpers
 {
+    [Obsolete("This class not in use. Logic moved to SignatureHelper.")]
     public static class Md5Helper
     {
         public static string CreateMd5(string input)
