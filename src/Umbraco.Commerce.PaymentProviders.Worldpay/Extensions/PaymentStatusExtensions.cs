@@ -18,8 +18,8 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay.Extensions
             return status switch
             {
                 PaymentStatus.Initialized => throw new NotImplementedException(ERROR_MESSAGE),
-                PaymentStatus.Authorized => WorldpayValues.AuthMode.PreAuthorisation,
-                PaymentStatus.Captured => WorldpayValues.AuthMode.FullAuthorisation,
+                PaymentStatus.Authorized => WorldpayValues.Request.AuthMode.PreAuthorisation,
+                PaymentStatus.Captured => WorldpayValues.Request.AuthMode.FullAuthorisation,
                 PaymentStatus.Cancelled => throw new NotImplementedException(ERROR_MESSAGE),
                 PaymentStatus.Refunded => throw new NotImplementedException(ERROR_MESSAGE),
                 PaymentStatus.PendingExternalSystem => throw new NotImplementedException(ERROR_MESSAGE),
