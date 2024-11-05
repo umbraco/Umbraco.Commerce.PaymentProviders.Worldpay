@@ -1,4 +1,5 @@
 using Umbraco.Commerce.Core.PaymentProviders;
+using Umbraco.Commerce.PaymentProviders.Worldpay.Constants;
 
 namespace Umbraco.Commerce.PaymentProviders.Worldpay
 {
@@ -112,6 +113,27 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
             IsAdvanced = true,
             SortOrder = 18000)]
         public bool VerboseLogging { get; set; }
+
+        [PaymentProviderSetting(
+            Name = "Disable Cancel Url",
+            Description = $"If this option enabled, then \"{WorldpayParameters.Request.Custom.CancelUrl}\" won't be included in generated form",
+            IsAdvanced = true,
+            SortOrder = 19000)]
+        public bool DisableCancelUrl { get; set; }
+
+        [PaymentProviderSetting(
+            Name = "Disable Return Url",
+            Description = $"If this option enabled, then \"{WorldpayParameters.Request.Custom.ReturnUrl}\" won't be included in generated form",
+            IsAdvanced = true,
+            SortOrder = 19001)]
+        public bool DisableReturnUrl { get; set; }
+
+        [PaymentProviderSetting(
+            Name = "Disable Callback Url",
+            Description = $"If this option enabled, then \"{WorldpayParameters.Request.Custom.CallbackUrl}\" won't be included in generated form",
+            IsAdvanced = true,
+            SortOrder = 19002)]
+        public bool DisableCallbackUrl { get; set; }
 
         #endregion
     }

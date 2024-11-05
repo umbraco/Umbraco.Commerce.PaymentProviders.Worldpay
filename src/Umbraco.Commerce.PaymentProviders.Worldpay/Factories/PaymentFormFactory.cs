@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Globalization;
 using Umbraco.Commerce.Common.Logging;
 using Umbraco.Commerce.Core.Models;
@@ -55,6 +56,19 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay.Factories
 
         private IDictionary<string, string> GetOrderDetails(PaymentProviderContext<WorldpayBusinessGateway350Settings> context)
         {
+            ArgumentNullException.ThrowIfNull(context);
+
+            var orderDetails = CreateOrderDetails(context);
+
+            AddSecurityDetails(context, orderDetails);
+
+            AddCustomDetails(context, orderDetails);
+
+            return orderDetails;
+        }
+
+        private Dictionary<string, string> CreateOrderDetails(PaymentProviderContext<WorldpayBusinessGateway350Settings> context)
+        {
             ArgumentNullException.ThrowIfNull(context.Settings.InstallId);
 
             var billingCountryCode = GetBillingCountryCode(context);
@@ -63,7 +77,6 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay.Factories
             var city = context.Order.Properties[context.Settings.BillingAddressCityPropertyAlias] ?? string.Empty;
             var postcode = context.Order.Properties[context.Settings.BillingAddressZipCodePropertyAlias] ?? string.Empty;
             var amount = context.Order.TransactionAmount.Value.Value.ToString("0.00", CultureInfo.InvariantCulture);
-            var orderReference = context.Order.GenerateOrderReference();
             var firstName = string.IsNullOrEmpty(context.Settings.BillingFirstNamePropertyAlias)
                 ? context.Order.CustomerInfo.FirstName
                 : context.Order.Properties[context.Settings.BillingFirstNamePropertyAlias];
@@ -77,7 +90,7 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay.Factories
                 ? WorldpayValues.Request.TestMode.Enabled
                 : WorldpayValues.Request.TestMode.Disabled;
 
-            var orderDetails = new Dictionary<string, string>
+            var orderDetails = new Dictionary<string, string>()
             {
                 { WorldpayParameters.Request.InstId, context.Settings.InstallId },
                 { WorldpayParameters.Request.TestMode, testMode },
@@ -90,31 +103,8 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay.Factories
                 { WorldpayParameters.Request.Address1, address1 },
                 { WorldpayParameters.Request.Town, city },
                 { WorldpayParameters.Request.Postcode, postcode },
-                { WorldpayParameters.Request.Country, billingCountryCode },
-                { WorldpayParameters.Request.Custom.OrderReference, orderReference },
-                { WorldpayParameters.Request.Custom.CancellUrl, context.Urls.CancelUrl },
-                { WorldpayParameters.Request.Custom.ReturnUrl, context.Urls.ContinueUrl },
-                { WorldpayParameters.Request.Custom.CallbackUrl, context.Urls.CallbackUrl }
+                { WorldpayParameters.Request.Country, billingCountryCode }
             };
-
-            if (!string.IsNullOrEmpty(context.Settings.Md5Secret))
-            {
-                var signatureBody = SignatureHelper.EnrichPatternWithValues(context.Settings, orderDetails);
-
-                if (context.Settings.VerboseLogging)
-                {
-                    _logger.Info("Signature body: {SignatureBody}", signatureBody);
-                }
-
-                var signature = SignatureHelper.CreateSignature(signatureBody);
-
-                if (context.Settings.VerboseLogging)
-                {
-                    _logger.Info("Signature result: {Signature}", signature);
-                }
-
-                orderDetails.Add(WorldpayParameters.Request.Signature, signature);
-            }
 
             return orderDetails;
         }
@@ -157,6 +147,51 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay.Factories
             var url = context.Settings.TestMode ? TEST_BASE_URL : LIVE_BASE_URL;
 
             return url;
+        }
+
+        private void AddSecurityDetails(PaymentProviderContext<WorldpayBusinessGateway350Settings> context, Dictionary<string, string> orderDetails)
+        {
+            if (string.IsNullOrEmpty(context.Settings.Md5Secret))
+            {
+                return;
+            }
+
+            var signatureBody = SignatureHelper.EnrichPatternWithValues(context.Settings, orderDetails);
+
+            if (context.Settings.VerboseLogging)
+            {
+                _logger.Info("Signature body: {SignatureBody}", signatureBody);
+            }
+
+            var signature = SignatureHelper.CreateSignature(signatureBody);
+
+            if (context.Settings.VerboseLogging)
+            {
+                _logger.Info("Signature result: {Signature}", signature);
+            }
+
+            orderDetails.Add(WorldpayParameters.Request.Signature, signature);
+        }
+
+        private void AddCustomDetails(PaymentProviderContext<WorldpayBusinessGateway350Settings> context, Dictionary<string, string> orderDetails)
+        {
+            var orderReference = context.Order.GenerateOrderReference();
+            orderDetails.Add(WorldpayParameters.Request.Custom.OrderReference, orderReference);
+
+            if (!context.Settings.DisableCancelUrl)
+            {
+                orderDetails.Add(WorldpayParameters.Request.Custom.CancelUrl, context.Urls.CancelUrl);
+            }
+
+            if (!context.Settings.DisableReturnUrl)
+            {
+                orderDetails.Add(WorldpayParameters.Request.Custom.ReturnUrl, context.Urls.ContinueUrl);
+            }
+
+            if (!context.Settings.DisableCallbackUrl)
+            {
+                orderDetails.Add(WorldpayParameters.Request.Custom.CallbackUrl, context.Urls.CallbackUrl);
+            }
         }
     }
 }

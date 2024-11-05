@@ -33,7 +33,7 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay.Constants
                 public const string PaymentResponseMessagePrefix = "M";
 
                 public const string OrderReference = $"{PaymentResponseMessagePrefix}{ShopperResultPrefix}_ctx.OrderRef";
-                public const string CancellUrl = $"{PaymentResponseMessagePrefix}{ShopperResultPrefix}_cancelurl";
+                public const string CancelUrl = $"{PaymentResponseMessagePrefix}{ShopperResultPrefix}_cancelurl";
                 public const string ReturnUrl = $"{PaymentResponseMessagePrefix}{ShopperResultPrefix}_returnurl";
                 public const string CallbackUrl = $"{PaymentResponseMessagePrefix}{ShopperResultPrefix}_callbackurl";
             }
