@@ -88,12 +88,11 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
         public override async Task<OrderReference?> GetOrderReferenceAsync(PaymentProviderContext<WorldpayBusinessGateway350Settings> context, CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(context);
-            ArgumentNullException.ThrowIfNull(context.Request);
             ArgumentNullException.ThrowIfNull(context.Settings);
 
             if (context.Settings.VerboseLogging)
             {
-                _logger.Info("{MethodName} method called for order: {OrderNumber}", nameof(GetOrderReferenceAsync), context.Order.OrderNumber);
+                _logger.Info("{MethodName} method called", nameof(GetOrderReferenceAsync));
             }
 
             var formData = await context.GetFormDataAsync(cancellationToken).ConfigureAwait(false);
@@ -108,7 +107,7 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
             {
                 if (!IsResponsePasswordValid(context, formData))
                 {
-                    _logger.Error("{PasswordParameter} for {OrderNumber} was incorrect during processing {MethodName} method", WorldpayParameters.Response.CallbackPW, context.Order.OrderNumber, nameof(ProcessCallbackAsync));
+                    _logger.Error("{PasswordParameter} was incorrect during processing {MethodName} method", WorldpayParameters.Response.CallbackPW, nameof(ProcessCallbackAsync));
 
                     return await base.GetOrderReferenceAsync(context, cancellationToken).ConfigureAwait(false);
                 }
