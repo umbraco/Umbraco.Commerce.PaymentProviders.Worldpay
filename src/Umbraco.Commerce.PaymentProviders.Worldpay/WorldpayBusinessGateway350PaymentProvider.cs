@@ -58,7 +58,7 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
             return ctx.Settings.ErrorUrl;
         }
 
-        public override Task<PaymentFormResult> GenerateFormAsync(PaymentProviderContext<WorldpayBusinessGateway350Settings> ctx, CancellationToken cancellationToken = default)
+        public override async Task<PaymentFormResult> GenerateFormAsync(PaymentProviderContext<WorldpayBusinessGateway350Settings> ctx, CancellationToken cancellationToken = default)
         {
             try
             {
@@ -85,14 +85,14 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
                 var address1 = ctx.Order.Properties[ctx.Settings.BillingAddressLine1PropertyAlias] ?? string.Empty;
                 var city = ctx.Order.Properties[ctx.Settings.BillingAddressCityPropertyAlias] ?? string.Empty;
                 var postcode = ctx.Order.Properties[ctx.Settings.BillingAddressZipCodePropertyAlias] ?? string.Empty;
-                var billingCountry = Context.Services.CountryService.GetCountry(ctx.Order.PaymentInfo.CountryId.Value);
+                var billingCountry = await Context.Services.CountryService.GetCountryAsync(ctx.Order.PaymentInfo.CountryId.Value);
                 var billingCountryCode = billingCountry.Code.ToUpperInvariant();
                 var amount = ctx.Order.TransactionAmount.Value.Value.ToString("0.00", CultureInfo.InvariantCulture);
-                var currency = Context.Services.CurrencyService.GetCurrency(ctx.Order.CurrencyId);
+                var currency = await Context.Services.CurrencyService.GetCurrencyAsync(ctx.Order.CurrencyId);
                 var currencyCode = currency.Code.ToUpperInvariant();
 
                 // Ensure billing country has valid ISO 3166 code
-                var iso3166Countries = Context.Services.CountryService.GetIso3166CountryRegions();
+                var iso3166Countries = await Context.Services.CountryService.GetIso3166CountryRegionsAsync();
                 if (iso3166Countries.All(x => x.Code != billingCountryCode))
                 {
                     throw new Exception("Country must be a valid ISO 3166 billing country code: " + billingCountry.Name);
@@ -149,10 +149,10 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
                     _logger.Info($"Form data {orderDetails.ToFriendlyString()}");
                 }
 
-                return Task.FromResult(new PaymentFormResult()
+                return new PaymentFormResult
                 {
                     Form = form
-                });
+                };
             }
             catch (Exception e)
             {
