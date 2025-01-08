@@ -1,4 +1,5 @@
 using Umbraco.Commerce.Core.PaymentProviders;
+using Umbraco.Commerce.PaymentProviders.Worldpay.Constants;
 
 namespace Umbraco.Commerce.PaymentProviders.Worldpay
 {
@@ -9,21 +10,21 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
 
         [PaymentProviderSetting(
             Name = "Continue Url",
-            Description = "The Continue URL",
+            Description = "The Continue URL (required)",
             SortOrder = 1000)]
-        public string ContinueUrl { get; set; } = default!;
+        public string? ContinueUrl { get; set; }
 
         [PaymentProviderSetting(
             Name = "Cancel Url",
-            Description = "The Cancel URL",
+            Description = "The Cancel URL (required)",
             SortOrder = 2000)]
-        public string CancelUrl { get; set; } = default!;
+        public string? CancelUrl { get; set; }
 
         [PaymentProviderSetting(
             Name = "Error Url",
-            Description = "The Error URL",
+            Description = "The Error URL (required)",
             SortOrder = 3000)]
-        public string ErrorUrl { get; set; } = default!;
+        public string? ErrorUrl { get; set; }
 
         [PaymentProviderSetting(
             Name = "Billing Property First Name",
@@ -60,15 +61,16 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
         /// </summary>
         [PaymentProviderSetting(
             Name = "Installation Reference",
-            Description = "A unique 27-character reference assigned for the website",
+            Description = "A unique 27-character reference assigned for the website (required)",
             SortOrder = 9000)]
-        public string InstallId { get; set; } = default!;
+        public string? InstallId { get; set; }
 
+        private const string Md5SecretPropertyName = "MD5 Secret";
         /// <summary>
         /// Read more: <see href="https://developerengine.fisglobal.com/apis/bg350/enhancing-security-with-md5#if-you-use-a-bespoke-setup"/>
         /// </summary>
         [PaymentProviderSetting(
-            Name = "MD5 Secret",
+            Name = Md5SecretPropertyName,
             Description = "The Worldpay MD5 secret to use when create MD5 hashes",
             SortOrder = 13000)]
         public string? Md5Secret { get; set; }
@@ -78,7 +80,7 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
         /// </summary>
         [PaymentProviderSetting(
             Name = "Signature Pattern",
-            Description = "The Worldpay's \"SignatureFields\" property. Required if MD5 Secret is not empty. Example value: instId:amount:currency:cartId:MC_userId",
+            Description = $"The Worldpay's \"SignatureFields\" property. Example value: amount:currency:instId:cartId (required if {Md5SecretPropertyName} is not empty)",
             SortOrder = 14000)]
         public string? SignaturePattern { get; set; }
 
@@ -111,6 +113,27 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
             IsAdvanced = true,
             SortOrder = 18000)]
         public bool VerboseLogging { get; set; }
+
+        [PaymentProviderSetting(
+            Name = "Disable Cancel Url",
+            Description = $"If this option enabled, then \"{WorldpayParameters.Request.Custom.CancelUrl}\" won't be included in generated form",
+            IsAdvanced = true,
+            SortOrder = 19000)]
+        public bool DisableCancelUrl { get; set; }
+
+        [PaymentProviderSetting(
+            Name = "Disable Return Url",
+            Description = $"If this option enabled, then \"{WorldpayParameters.Request.Custom.ReturnUrl}\" won't be included in generated form",
+            IsAdvanced = true,
+            SortOrder = 19001)]
+        public bool DisableReturnUrl { get; set; }
+
+        [PaymentProviderSetting(
+            Name = "Disable Callback Url",
+            Description = $"If this option enabled, then \"{WorldpayParameters.Request.Custom.CallbackUrl}\" won't be included in generated form",
+            IsAdvanced = true,
+            SortOrder = 19002)]
+        public bool DisableCallbackUrl { get; set; }
 
         #endregion
     }
