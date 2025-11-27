@@ -1,22 +1,21 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Globalization;
 using System.Linq;
-using Umbraco.Commerce.Core.Models;
-using Umbraco.Commerce.Core.Api;
-using Umbraco.Commerce.Core.PaymentProviders;
-using Umbraco.Commerce.PaymentProviders.Worldpay.Helpers;
-using Umbraco.Commerce.Common.Logging;
-using Umbraco.Commerce.Extensions;
-using System.Threading.Tasks;
-using System.Net.Http;
-using System.Web;
-using System.Collections.Specialized;
 using System.Threading;
+using System.Threading.Tasks;
+using System.Web;
+using Umbraco.Commerce.Common.Logging;
+using Umbraco.Commerce.Core.Api;
+using Umbraco.Commerce.Core.Models;
+using Umbraco.Commerce.Core.PaymentProviders;
+using Umbraco.Commerce.Extensions;
+using Umbraco.Commerce.PaymentProviders.Worldpay.Helpers;
 
 namespace Umbraco.Commerce.PaymentProviders.Worldpay
 {
-    [PaymentProvider("worldpay-bs350", "Worldpay Business Gateway 350", "Worldpay Business Gateway 350 payment provider", Icon = "icon-credit-card")]
+    [PaymentProvider("worldpay-bs350", Icon = "icon-credit-card")]
     public class WorldpayBusinessGateway350PaymentProvider : PaymentProviderBase<WorldpayBusinessGateway350Settings>
     {
         private const string LiveBaseUrl = "https://secure.worldpay.com/wcc/purchase";
@@ -26,8 +25,9 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
 
         public override bool FinalizeAtContinueUrl => false;
 
-        public WorldpayBusinessGateway350PaymentProvider(UmbracoCommerceContext ctx,
-            ILogger<WorldpayBusinessGateway350PaymentProvider> logger) 
+        public WorldpayBusinessGateway350PaymentProvider(
+            UmbracoCommerceContext ctx,
+            ILogger<WorldpayBusinessGateway350PaymentProvider> logger)
             : base(ctx)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -58,7 +58,7 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
             return ctx.Settings.ErrorUrl;
         }
 
-        public override Task<PaymentFormResult> GenerateFormAsync(PaymentProviderContext<WorldpayBusinessGateway350Settings> ctx, CancellationToken cancellationToken = default)
+        public override async Task<PaymentFormResult> GenerateFormAsync(PaymentProviderContext<WorldpayBusinessGateway350Settings> ctx, CancellationToken cancellationToken = default)
         {
             try
             {
@@ -85,14 +85,14 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
                 var address1 = ctx.Order.Properties[ctx.Settings.BillingAddressLine1PropertyAlias] ?? string.Empty;
                 var city = ctx.Order.Properties[ctx.Settings.BillingAddressCityPropertyAlias] ?? string.Empty;
                 var postcode = ctx.Order.Properties[ctx.Settings.BillingAddressZipCodePropertyAlias] ?? string.Empty;
-                var billingCountry = Context.Services.CountryService.GetCountry(ctx.Order.PaymentInfo.CountryId.Value);
+                var billingCountry = await Context.Services.CountryService.GetCountryAsync(ctx.Order.PaymentInfo.CountryId.Value);
                 var billingCountryCode = billingCountry.Code.ToUpperInvariant();
                 var amount = ctx.Order.TransactionAmount.Value.Value.ToString("0.00", CultureInfo.InvariantCulture);
-                var currency = Context.Services.CurrencyService.GetCurrency(ctx.Order.CurrencyId);
+                var currency = await Context.Services.CurrencyService.GetCurrencyAsync(ctx.Order.CurrencyId);
                 var currencyCode = currency.Code.ToUpperInvariant();
 
                 // Ensure billing country has valid ISO 3166 code
-                var iso3166Countries = Context.Services.CountryService.GetIso3166CountryRegions();
+                var iso3166Countries = await Context.Services.CountryService.GetIso3166CountryRegionsAsync();
                 if (iso3166Countries.All(x => x.Code != billingCountryCode))
                 {
                     throw new Exception("Country must be a valid ISO 3166 billing country code: " + billingCountry.Name);
@@ -149,10 +149,10 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
                     _logger.Info($"Form data {orderDetails.ToFriendlyString()}");
                 }
 
-                return Task.FromResult(new PaymentFormResult()
+                return new PaymentFormResult
                 {
                     Form = form
-                });
+                };
             }
             catch (Exception e)
             {
@@ -162,26 +162,27 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
             }
         }
 
-        public override async Task<OrderReference> GetOrderReferenceAsync(PaymentProviderContext<WorldpayBusinessGateway350Settings> ctx, CancellationToken cancellationToken = default)
+        public override async Task<OrderReference> GetOrderReferenceAsync(PaymentProviderContext<WorldpayBusinessGateway350Settings> context, CancellationToken cancellationToken = default)
         {
-            ctx.Request.MustNotBeNull("ctx.Request");
-            ctx.Settings.MustNotBeNull("ctx.Settings");
+            ArgumentNullException.ThrowIfNull(context);
+            ArgumentNullException.ThrowIfNull(context.Settings);
 
-            var queryData = HttpUtility.ParseQueryString(ctx.Request.RequestUri.Query);;
-            var formData = await ctx.Request.Content.ReadAsFormDataAsync(cancellationToken).ConfigureAwait(false);
+            NameValueCollection queryData = HttpUtility.ParseQueryString(context.HttpContext.Request.QueryString.Value);
 
-            ctx.AdditionalData.Add("queryData", queryData);
-            ctx.AdditionalData.Add("formData", formData);
+            Microsoft.AspNetCore.Http.IFormCollection formData = await context.HttpContext.Request.ReadFormAsync(cancellationToken).ConfigureAwait(false);
 
-            if (ctx.Settings.VerboseLogging)
+            context.AdditionalData.Add("queryData", queryData);
+            context.AdditionalData.Add("formData", formData);
+
+            if (context.Settings.VerboseLogging)
             {
                 _logger.Info($"Worldpay data {formData.ToFriendlyString()}");
             }
 
-            if (!string.IsNullOrEmpty(ctx.Settings.ResponsePassword))
+            if (!string.IsNullOrEmpty(context.Settings.ResponsePassword))
             {
                 // Validate password
-                if (ctx.Settings.ResponsePassword != formData["callbackPW"])
+                if (context.Settings.ResponsePassword != formData["callbackPW"])
                 {
                     return null;
                 }
@@ -192,7 +193,7 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
                 return orderReference;
             }
 
-            return await base.GetOrderReferenceAsync(ctx, cancellationToken).ConfigureAwait(false);
+            return await base.GetOrderReferenceAsync(context, cancellationToken).ConfigureAwait(false);
         }
 
         public override Task<CallbackResult> ProcessCallbackAsync(PaymentProviderContext<WorldpayBusinessGateway350Settings> ctx, CancellationToken cancellationToken = default)
