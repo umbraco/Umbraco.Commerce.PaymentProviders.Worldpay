@@ -3,9 +3,13 @@ using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Globalization;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Primitives;
 using Umbraco.Commerce.Common.Logging;
 using Umbraco.Commerce.Core.Api;
 using Umbraco.Commerce.Core.Models;
@@ -20,6 +24,10 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
     {
         private const string LiveBaseUrl = "https://secure.worldpay.com/wcc/purchase";
         private const string TestBaseUrl = "https://secure-test.worldpay.com/wcc/purchase";
+
+        private const string OrderReferenceField = "MC_ctx.OrderRef";
+        private const string QueryDataKey = "queryData";
+        private const string FormDataKey = "formData";
 
         private readonly ILogger<WorldpayBusinessGateway350PaymentProvider> _logger;
 
@@ -87,7 +95,7 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
                 var postcode = ctx.Order.Properties[ctx.Settings.BillingAddressZipCodePropertyAlias] ?? string.Empty;
                 var billingCountry = await Context.Services.CountryService.GetCountryAsync(ctx.Order.PaymentInfo.CountryId.Value);
                 var billingCountryCode = billingCountry.Code.ToUpperInvariant();
-                var amount = ctx.Order.TransactionAmount.Value.Value.ToString("0.00", CultureInfo.InvariantCulture);
+                var amount = FormatAmount(ctx.Order.TransactionAmount.Value.Value);
                 var currency = await Context.Services.CurrencyService.GetCurrencyAsync(ctx.Order.CurrencyId);
                 var currencyCode = currency.Code.ToUpperInvariant();
 
@@ -118,7 +126,7 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
                     { "town", city },
                     { "postcode", postcode },
                     { "country", billingCountryCode },
-                    { "MC_ctx.OrderRef", ctx.Order.GenerateOrderReference() },
+                    { OrderReferenceField, ctx.Order.GenerateOrderReference() },
                     { "MC_cancelurl", ctx.Urls.CancelUrl },
                     { "MC_returnurl", ctx.Urls.ContinueUrl },
                     { "MC_callbackurl", ctx.Urls.CallbackUrl }
@@ -132,7 +140,7 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
 
                     if (ctx.Settings.VerboseLogging)
                     {
-                        _logger.Info($"Before Md5: " + ctx.Settings.Md5Secret + ":" + amount + ":" + currencyCode + ":" + ctx.Settings.InstallId + ":" + ctx.Order.OrderNumber);
+                        _logger.Info($"Signature fields: {amount}:{currencyCode}:{ctx.Settings.InstallId}:{ctx.Order.OrderNumber}");
                         _logger.Info($"Signature: " + orderSignature);
                     }
                 }
@@ -167,28 +175,22 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
             ArgumentNullException.ThrowIfNull(context);
             ArgumentNullException.ThrowIfNull(context.Settings);
 
-            NameValueCollection queryData = HttpUtility.ParseQueryString(context.HttpContext.Request.QueryString.Value);
-
-            Microsoft.AspNetCore.Http.IFormCollection formData = await context.HttpContext.Request.ReadFormAsync(cancellationToken).ConfigureAwait(false);
-
-            context.AdditionalData.Add("queryData", queryData);
-            context.AdditionalData.Add("formData", formData);
+            WorldpayCallbackData callbackData = await GetCallbackDataAsync(context.AdditionalData, context.HttpContext.Request, cancellationToken).ConfigureAwait(false);
 
             if (context.Settings.VerboseLogging)
             {
-                _logger.Info($"Worldpay data {formData.ToFriendlyString()}");
+                _logger.Info($"Worldpay data {callbackData.Form.ToMaskedFriendlyString()}");
             }
 
-            if (!string.IsNullOrEmpty(context.Settings.ResponsePassword))
+            CallbackCheckResult passwordCheck = CheckResponsePassword(callbackData.Form, context.Settings.ResponsePassword);
+            if (passwordCheck != CallbackCheckResult.Valid)
             {
-                // Validate password
-                if (context.Settings.ResponsePassword != formData["callbackPW"])
-                {
-                    return null;
-                }
+                _logger.Warn($"Worldpay callback refused: {DescribeCheckResult(passwordCheck)}");
+
+                return null;
             }
 
-            if (OrderReference.TryParse(formData["MC_ctx.OrderRef"], out var orderReference))
+            if (OrderReference.TryParse(callbackData.Form[OrderReferenceField], out var orderReference))
             {
                 return orderReference;
             }
@@ -196,58 +198,208 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
             return await base.GetOrderReferenceAsync(context, cancellationToken).ConfigureAwait(false);
         }
 
-        public override Task<CallbackResult> ProcessCallbackAsync(PaymentProviderContext<WorldpayBusinessGateway350Settings> ctx, CancellationToken cancellationToken = default)
+        public override async Task<CallbackResult> ProcessCallbackAsync(PaymentProviderContext<WorldpayBusinessGateway350Settings> ctx, CancellationToken cancellationToken = default)
         {
-            // The request stream is processed inside GetOrderReferenceAsync and the relevant data
-            // is stored in the payment provider context to prevent needing to re-process it
-            // so we just access it directly from the context assuming it exists.
-            var queryData = ctx.AdditionalData["queryData"] as NameValueCollection;
-            var formData = ctx.AdditionalData["formData"] as NameValueCollection;
+            ArgumentNullException.ThrowIfNull(ctx);
+            ArgumentNullException.ThrowIfNull(ctx.Settings);
 
-            if (queryData["msgType"] == "authResult")
+            // The request may already have been read by GetOrderReferenceAsync, in which case
+            // the parsed data is reused from the context; otherwise it's read here.
+            WorldpayCallbackData callbackData = await GetCallbackDataAsync(ctx.AdditionalData, ctx.HttpContext.Request, cancellationToken).ConfigureAwait(false);
+            NameValueCollection formData = callbackData.Form;
+
+            var msgType = formData["msgType"] ?? callbackData.Query["msgType"];
+            if (msgType != "authResult")
             {
-                _logger.Info($"Payment call back for cart {ctx.Order.OrderNumber}");
+                return CallbackResult.Ok();
+            }
 
-                if (ctx.Settings.VerboseLogging)
-                {
-                    _logger.Info($"Worldpay data {formData.ToFriendlyString()}");
-                }
+            _logger.Info($"Payment call back for cart {ctx.Order.OrderNumber}");
 
-                if (!string.IsNullOrEmpty(ctx.Settings.ResponsePassword))
+            if (ctx.Settings.VerboseLogging)
+            {
+                _logger.Info($"Worldpay data {formData.ToMaskedFriendlyString()}");
+            }
+
+            CallbackCheckResult passwordCheck = CheckResponsePassword(formData, ctx.Settings.ResponsePassword);
+            if (passwordCheck != CallbackCheckResult.Valid)
+            {
+                _logger.Warn($"Payment call back for cart {ctx.Order.OrderNumber} refused: {DescribeCheckResult(passwordCheck)}");
+
+                return CallbackResult.Ok();
+            }
+
+            if (formData["transStatus"] != "Y")
+            {
+                _logger.Info($"Payment call back for cart {ctx.Order.OrderNumber} payment not authorised or error");
+
+                return CallbackResult.Ok();
+            }
+
+            var currency = await Context.Services.CurrencyService.GetCurrencyAsync(ctx.Order.CurrencyId).ConfigureAwait(false);
+            var expectedAmount = FormatAmount(ctx.Order.TransactionAmount.Value.Value);
+            var expectedCurrencyCode = currency.Code.ToUpperInvariant();
+
+            CallbackCheckResult paymentCheck = CheckAuthorisedPayment(formData, expectedAmount, expectedCurrencyCode, out var authorisedAmount);
+            if (paymentCheck != CallbackCheckResult.Valid)
+            {
+                _logger.Warn($"Payment call back for cart {ctx.Order.OrderNumber} refused: {DescribeCheckResult(paymentCheck)} "
+                    + $"(expected {expectedAmount} {expectedCurrencyCode}, received {formData["authAmount"]} {formData["authCurrency"]})");
+
+                return CallbackResult.Ok();
+            }
+
+            var transactionId = formData["transId"];
+            var paymentStatus = GetPaymentStatus(formData["authMode"], ctx.Settings.Capture);
+
+            _logger.Info($"Payment call back for cart {ctx.Order.OrderNumber} payment authorised");
+
+            return CallbackResult.Ok(new TransactionInfo
+            {
+                AmountAuthorized = authorisedAmount,
+                TransactionFee = 0m,
+                TransactionId = transactionId,
+                PaymentStatus = paymentStatus
+            });
+        }
+
+        /// <summary>
+        /// Formats an amount the way it's sent to Worldpay in the payment form.
+        /// </summary>
+        internal static string FormatAmount(decimal amount)
+            => amount.ToString("0.00", CultureInfo.InvariantCulture);
+
+        /// <summary>
+        /// Maps the <c>authMode</c> Worldpay returns in the callback to a payment status.
+        /// <c>A</c> is a full authorisation, which Worldpay settles itself, so the payment is captured.
+        /// <c>E</c> is a pre-authorisation, which still has to be captured in the Worldpay Merchant Interface.
+        /// Any other value falls back to the Capture setting the payment form was sent with.
+        /// </summary>
+        internal static PaymentStatus GetPaymentStatus(string authMode, bool capture) => authMode switch
+        {
+            "A" => PaymentStatus.Captured,
+            "E" => PaymentStatus.Authorized,
+            _ => capture ? PaymentStatus.Captured : PaymentStatus.Authorized,
+        };
+
+        /// <summary>
+        /// Reads the callback's query string and form, reusing the copy stored in
+        /// <paramref name="additionalData"/> if the request has already been read.
+        /// </summary>
+        internal static async Task<WorldpayCallbackData> GetCallbackDataAsync(IDictionary<string, object> additionalData, HttpRequest request, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(additionalData);
+            ArgumentNullException.ThrowIfNull(request);
+
+            if (additionalData.TryGetValue(QueryDataKey, out var storedQuery) && storedQuery is NameValueCollection query
+                && additionalData.TryGetValue(FormDataKey, out var storedForm) && storedForm is NameValueCollection form)
+            {
+                return new WorldpayCallbackData(query, form);
+            }
+
+            query = HttpUtility.ParseQueryString(request.QueryString.Value ?? string.Empty);
+            form = new NameValueCollection();
+
+            if (request.HasFormContentType)
+            {
+                IFormCollection formCollection = await request.ReadFormAsync(cancellationToken).ConfigureAwait(false);
+                foreach (KeyValuePair<string, StringValues> field in formCollection)
                 {
-                    // validate password
-                    if (ctx.Settings.ResponsePassword != formData["callbackPW"])
+                    foreach (var value in field.Value)
                     {
-                        _logger.Info($"Payment call back for cart {ctx.Order.OrderNumber} response password incorrect");
-
-                        return Task.FromResult(CallbackResult.Ok());
+                        form.Add(field.Key, value);
                     }
-                }
-
-                // if still here, password was not required or matched
-                if (formData["transStatus"] == "Y")
-                {
-                    var totalAmount = decimal.Parse(formData["authAmount"], CultureInfo.InvariantCulture);
-                    var transactionId = formData["transId"];
-                    var paymentStatus = formData["authMode"] == "A" ? PaymentStatus.Authorized : PaymentStatus.Captured;
-
-                    _logger.Info($"Payment call back for cart {ctx.Order.OrderNumber} payment authorised");
-
-                    return Task.FromResult(CallbackResult.Ok(new TransactionInfo
-                    {
-                        AmountAuthorized = totalAmount,
-                        TransactionFee = 0m,
-                        TransactionId = transactionId,
-                        PaymentStatus = paymentStatus
-                    }));
-                }
-                else
-                {
-                    _logger.Info($"Payment call back for cart {ctx.Order.OrderNumber} payment not authorised or error");
                 }
             }
 
-            return Task.FromResult(CallbackResult.Ok());
+            additionalData[QueryDataKey] = query;
+            additionalData[FormDataKey] = form;
+
+            return new WorldpayCallbackData(query, form);
         }
+
+        /// <summary>
+        /// Checks the callback password sent by Worldpay against the configured Response Password.
+        /// A Response Password must be configured.
+        /// </summary>
+        internal static CallbackCheckResult CheckResponsePassword(NameValueCollection formData, string responsePassword)
+        {
+            ArgumentNullException.ThrowIfNull(formData);
+
+            if (string.IsNullOrEmpty(responsePassword))
+            {
+                return CallbackCheckResult.ResponsePasswordNotConfigured;
+            }
+
+            return FixedTimeEquals(responsePassword, formData["callbackPW"])
+                ? CallbackCheckResult.Valid
+                : CallbackCheckResult.ResponsePasswordMismatch;
+        }
+
+        /// <summary>
+        /// Checks the amount and currency Worldpay authorised (<c>authAmount</c> and <c>authCurrency</c>)
+        /// against the amount and currency the payment form was generated for.
+        /// </summary>
+        internal static CallbackCheckResult CheckAuthorisedPayment(NameValueCollection formData, string expectedAmount, string expectedCurrencyCode, out decimal authorisedAmount)
+        {
+            ArgumentNullException.ThrowIfNull(formData);
+
+            authorisedAmount = 0m;
+
+            if (!decimal.TryParse(formData["authAmount"], NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var receivedAmount)
+                || !decimal.TryParse(expectedAmount, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var expected))
+            {
+                return CallbackCheckResult.AmountMissingOrInvalid;
+            }
+
+            if (!string.Equals(formData["authCurrency"], expectedCurrencyCode, StringComparison.OrdinalIgnoreCase))
+            {
+                return CallbackCheckResult.CurrencyMismatch;
+            }
+
+            if (receivedAmount != expected)
+            {
+                return CallbackCheckResult.AmountMismatch;
+            }
+
+            authorisedAmount = receivedAmount;
+
+            return CallbackCheckResult.Valid;
+        }
+
+        internal static bool FixedTimeEquals(string expected, string actual)
+        {
+            if (expected == null || actual == null)
+            {
+                return false;
+            }
+
+            // Hash both values first so the comparison time doesn't depend on their lengths either.
+            return CryptographicOperations.FixedTimeEquals(
+                SHA256.HashData(Encoding.UTF8.GetBytes(expected)),
+                SHA256.HashData(Encoding.UTF8.GetBytes(actual)));
+        }
+
+        private static string DescribeCheckResult(CallbackCheckResult result) => result switch
+        {
+            CallbackCheckResult.ResponsePasswordNotConfigured => "no Response Password is configured on the payment method; set it to match the Payment Response password in Worldpay",
+            CallbackCheckResult.ResponsePasswordMismatch => "the callback password doesn't match the Response Password configured on the payment method",
+            CallbackCheckResult.AmountMissingOrInvalid => "the authorised amount is missing or isn't a valid amount",
+            CallbackCheckResult.CurrencyMismatch => "the authorised currency doesn't match the order currency",
+            CallbackCheckResult.AmountMismatch => "the authorised amount doesn't match the order total",
+            _ => result.ToString(),
+        };
+
+        internal enum CallbackCheckResult
+        {
+            Valid,
+            ResponsePasswordNotConfigured,
+            ResponsePasswordMismatch,
+            AmountMissingOrInvalid,
+            CurrencyMismatch,
+            AmountMismatch,
+        }
+
+        internal sealed record WorldpayCallbackData(NameValueCollection Query, NameValueCollection Form);
     }
 }
