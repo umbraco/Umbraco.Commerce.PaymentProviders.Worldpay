@@ -7,7 +7,7 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay.Helpers
     {
         public static string CreateMd5(string input)
         {
-            return new MD5CryptoServiceProvider().ComputeHash(Encoding.UTF8.GetBytes(input)).ToHex(true);
+            return MD5.HashData(Encoding.UTF8.GetBytes(input)).ToHex(true);
         }
 
         public static string ToHex(this byte[] bytes, bool toLower)
