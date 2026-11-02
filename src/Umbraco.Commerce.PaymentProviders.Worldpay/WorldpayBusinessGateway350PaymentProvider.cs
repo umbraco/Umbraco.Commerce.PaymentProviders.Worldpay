@@ -250,7 +250,7 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
             }
 
             var transactionId = formData["transId"];
-            var paymentStatus = formData["authMode"] == "A" ? PaymentStatus.Authorized : PaymentStatus.Captured;
+            var paymentStatus = GetPaymentStatus(formData["authMode"], ctx.Settings.Capture);
 
             _logger.Info($"Payment call back for cart {ctx.Order.OrderNumber} payment authorised");
 
@@ -268,6 +268,19 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
         /// </summary>
         internal static string FormatAmount(decimal amount)
             => amount.ToString("0.00", CultureInfo.InvariantCulture);
+
+        /// <summary>
+        /// Maps the <c>authMode</c> Worldpay returns in the callback to a payment status.
+        /// <c>A</c> is a full authorisation, which Worldpay settles itself, so the payment is captured.
+        /// <c>E</c> is a pre-authorisation, which still has to be captured in the Worldpay Merchant Interface.
+        /// Any other value falls back to the Capture setting the payment form was sent with.
+        /// </summary>
+        internal static PaymentStatus GetPaymentStatus(string authMode, bool capture) => authMode switch
+        {
+            "A" => PaymentStatus.Captured,
+            "E" => PaymentStatus.Authorized,
+            _ => capture ? PaymentStatus.Captured : PaymentStatus.Authorized,
+        };
 
         /// <summary>
         /// Reads the callback's query string and form, reusing the copy stored in
