@@ -17,7 +17,7 @@ public class WorldpaySignatureTests
         byte[] bytes = [0x00, 0x0f, 0xa0, 0xff];
 
         Assert.Equal("000fa0ff", bytes.ToHex(true));
-        Assert.Equal("000fa0ff", bytes.ToHex(false).ToLowerInvariant());
+        Assert.Equal("000fa0ff", bytes.ToHex(false));
     }
 
     [Fact]
@@ -25,7 +25,7 @@ public class WorldpaySignatureTests
     {
         string signature = WorldpayBusinessGateway350PaymentProvider.CreateOrderSignature("s3cret", "12.50", "GBP", "1234567", "ORDER-0001");
 
-        Assert.Equal(Md5Helper.CreateMd5("s3cret:12.50:GBP:1234567:ORDER-0001"), signature);
+        Assert.Equal("c003f52219aa5169d75315ef293d4314", signature); // MD5 of "s3cret:12.50:GBP:1234567:ORDER-0001"
         Assert.Matches("^[0-9a-f]{32}$", signature);
     }
 
