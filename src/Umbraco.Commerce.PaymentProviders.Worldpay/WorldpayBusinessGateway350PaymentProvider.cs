@@ -126,7 +126,7 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
 
                 if (!string.IsNullOrEmpty(ctx.Settings.Md5Secret))
                 {
-                    var orderSignature = Md5Helper.CreateMd5(ctx.Settings.Md5Secret + ":" + amount + ":" + currencyCode + ":" + ctx.Settings.InstallId + ":" + ctx.Order.OrderNumber);
+                    var orderSignature = CreateOrderSignature(ctx.Settings.Md5Secret, amount, currencyCode, ctx.Settings.InstallId, ctx.Order.OrderNumber);
 
                     orderDetails.Add("signature", orderSignature);
 
@@ -161,6 +161,13 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay
                 throw;
             }
         }
+
+        /// <summary>
+        /// The MD5 signature Worldpay checks the payment form against, with the default
+        /// signature fields <c>amount:currency:instId:cartId</c> after the secret.
+        /// </summary>
+        internal static string CreateOrderSignature(string md5Secret, string amount, string currencyCode, string installId, string cartId)
+            => Md5Helper.CreateMd5(md5Secret + ":" + amount + ":" + currencyCode + ":" + installId + ":" + cartId);
 
         public override async Task<OrderReference> GetOrderReferenceAsync(PaymentProviderContext<WorldpayBusinessGateway350Settings> context, CancellationToken cancellationToken = default)
         {
