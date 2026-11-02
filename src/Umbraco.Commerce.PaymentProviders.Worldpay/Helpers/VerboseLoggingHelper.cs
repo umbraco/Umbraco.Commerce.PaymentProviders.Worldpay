@@ -29,6 +29,29 @@ namespace Umbraco.Commerce.PaymentProviders.Worldpay.Helpers
             return "{" + string.Join(",", items) + "}";
         }
 
+        /// <summary>
+        /// Field names whose values are never written to the logs.
+        /// </summary>
+        private static readonly HashSet<string> _secretFields = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "callbackPW",
+        };
+
+        /// <summary>
+        /// Like <see cref="ToFriendlyString(NameValueCollection)"/>, but replaces the values of secret fields
+        /// such as <c>callbackPW</c> with <c>***</c>.
+        /// </summary>
+        internal static string ToMaskedFriendlyString(this NameValueCollection nameValueCollection)
+        {
+            ArgumentNullException.ThrowIfNull(nameValueCollection);
+
+            var nvc = nameValueCollection.AllKeys.SelectMany(nameValueCollection.GetValues, (k, v) => new { key = k, value = v });
+            IEnumerable<string> items = from item in nvc
+                                        select item.key + "=" + (item.key != null && _secretFields.Contains(item.key) ? "***" : item.value);
+
+            return "{" + string.Join(",", items) + "}";
+        }
+
         public static string ToFriendlyString(this IFormCollection formData)
         {
             ArgumentNullException.ThrowIfNull(formData);

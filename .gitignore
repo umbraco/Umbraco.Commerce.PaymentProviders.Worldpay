@@ -482,3 +482,4 @@ $RECYCLE.BIN/
 ## Umbraco Commerce specific
 ##
 src/Umbraco.Commerce.PaymentProviders.Worldpay/packages.lock.json
+tests/Umbraco.Commerce.PaymentProviders.Worldpay.UnitTests/packages.lock.json
