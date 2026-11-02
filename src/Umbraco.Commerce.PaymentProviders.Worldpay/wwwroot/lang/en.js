@@ -31,7 +31,7 @@ export default {
         'worldpayBs350SettingsMd5SecretDescription': 'The Worldpay MD5 secret to use when create MD5 hashes',
 
         'worldpayBs350SettingsResponsePasswordLabel': 'Response Password',
-        'worldpayBs350SettingsResponsePasswordDescription': 'The Worldpay payment response password to use to valida payment responses',
+        'worldpayBs350SettingsResponsePasswordDescription': 'Required. The Payment Response password set on your Worldpay installation, used to validate payment responses',
 
         'worldpayBs350SettingsCaptureLabel': 'Capture',
         'worldpayBs350SettingsCaptureDescription': 'Flag indicating whether to immediately capture the payment, or whether to just authorize the payment for later (manual) capture',
